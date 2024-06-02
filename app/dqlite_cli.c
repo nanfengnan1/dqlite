@@ -50,7 +50,8 @@ const char *dqlite_cli_prefix[26][DQ_CLI_PREFIX_NUM_MAX] = {
 	},
 	/* E */
 	{
-		"exit"
+		"exit",
+		"end"
 	},
 	/* F */
 	{
@@ -248,7 +249,7 @@ int dqlite_cli_client_exec_sql(const char *line)
 
 	ret = -1;
 	
-	if (strncasecmp("select", line, 4) == 0) {
+	if (strncasecmp("select", line, 6) == 0) {
 		if (dqlite_inner_query_sql(&g_cli_context.client, line, &rows) < 0) {
 			return ret;
 		}
