@@ -22,6 +22,19 @@ struct dqlite_g_context g_cli_context = {
 	.database_name = DQLITE_DATABASE_NAME
 };
 
+typedef enum {
+	DQLITE_PRAGMA_HELP,
+	DQLITE_PRAGMA_END
+} dqlite_pragma_t;
+
+const char *dqlite_pragma[] = {
+	".help",
+};
+
+const char *dqlite_pragma_desc[] = {
+	"Show this message",
+};
+
 const char *dqlite_cli_prefix[26][DQ_CLI_PREFIX_NUM_MAX] = {
 	/* ALTER, ALTER TABLE*/
 	{
@@ -176,7 +189,7 @@ char *dqlite_cli_hints(const char *buf, int *color, int *bold)
     return NULL;
 }
 
-int dqlite_cli_clent_connect_server(uint32_t ip, uint16_t port)
+int dqlite_cli_connect_server(uint32_t ip, uint16_t port)
 {
 	int fd;
 	struct sockaddr_in addr;
@@ -200,7 +213,7 @@ int dqlite_cli_clent_connect_server(uint32_t ip, uint16_t port)
 	return fd;
 }
 
-int dqlite_cli_client_init()
+int dqlite_cli_init()
 {
 	int ret = -1;
 	int fd;
@@ -214,7 +227,7 @@ int dqlite_cli_client_init()
 	
     ipv4_addr = ntohl(ipv4_addr);
 	
-	if ((fd = dqlite_cli_clent_connect_server(ipv4_addr, g_cli_context.listen_port)) < 0) {
+	if ((fd = dqlite_cli_connect_server(ipv4_addr, g_cli_context.listen_port)) < 0) {
 		return ret;
 	}
 	
@@ -235,21 +248,42 @@ int dqlite_cli_client_init()
 	return 0;
 }
 
-int dqlite_exit_cli_client(const char *line)
+int dqlite_cli_exit(const char *line)
 {
 	return (strncasecmp("quit", line, 4) == 0 
 			|| strncasecmp("exit", line, 4) == 0) ? 0: -1;
 }
 
-int dqlite_cli_client_exec_sql(const char *line)
+int dqlite_cli_exec_progma(const char *line)
+{
+	if (strncmp(".help", line, 5) == 0) {
+		
+		dqlite_pragma_t prag;
+
+		for (prag = DQLITE_PRAGMA_HELP; prag < DQLITE_PRAGMA_END; ++prag) {
+			
+			printf("%s    %s\n", dqlite_pragma[prag] , dqlite_pragma_desc[prag]);
+		}
+	}
+
+	return 0;
+}
+
+int dqlite_cli_exec_sql(const char *line)
 {
 	int ret, i;
     struct rows rows;
     struct row *row, *next;
 
 	ret = -1;
+
+	if (strncasecmp(".", line, 1) == 0) {
+		
+		if (dqlite_cli_exec_progma(line) < 0)
+			return ret;
+		
+	} else if (strncasecmp("select", line, 6) == 0) {
 	
-	if (strncasecmp("select", line, 6) == 0) {
 		if (dqlite_inner_query_sql(&g_cli_context.client, line, &rows) < 0) {
 			return ret;
 		}
@@ -300,7 +334,7 @@ int dqlite_cli_client_exec_sql(const char *line)
 int main(int argc, char **argv) {
     char *line;
 
-	if (dqlite_cli_client_init() < 0) {
+	if (dqlite_cli_init() < 0) {
 		printf("cli client init failure\n");
 		return -1;
 	}
@@ -317,15 +351,16 @@ int main(int argc, char **argv) {
     while((line = linenoise("dqlite> ")) != NULL) {
         if (line == NULL) break;
 
-		if (!dqlite_exit_cli_client(line)) {
+		linenoiseHistoryAdd(line);
+		linenoiseHistorySave("history.txt");
+
+		if (!dqlite_cli_exit(line)) {
 			free(line);
 			break;
 		}
 
-		linenoiseHistoryAdd(line);
-		linenoiseHistorySave("history.txt");
-
-		dqlite_cli_client_exec_sql(line);
+		if (dqlite_cli_exec_sql(line) < 0)
+			printf("dqlite sql execute failure\n");
 
         free(line);
     }
