@@ -2,18 +2,23 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
+#include <ctype.h>
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/select.h>
 #include <netinet/in.h>
+
 #include "linenoise.h"
 #include "dqlite.h"
 #include "dqlite_sql.h"
+#include "dqlite_format.h"
 #include "dqlite_global.h"
 
 #define DQ_CLI_PREFIX_NUM_MAX 32
 #define HISTORY_MAX_LENGTH 40
+
+#define dqlite_cli_subfix_is_valid(str, i) (!isspace(*(str + i)) && *(str + i) != '\0')
 
 struct dqlite_g_context g_cli_context = {
 	.listen_address = "127.0.0.1",
@@ -24,16 +29,31 @@ struct dqlite_g_context g_cli_context = {
 
 typedef enum {
 	DQLITE_PRAGMA_HELP,
+	DQLITE_PRAGMA_HEADER,
+	DQLITE_PARGMA_MODE,
 	DQLITE_PRAGMA_END
 } dqlite_pragma_t;
 
 const char *dqlite_pragma[] = {
 	".help",
+	".header(s) ON|OFF",
+	".mode MODE"
 };
 
 const char *dqlite_pragma_desc[] = {
-	"Show this message",
+    "                 Show this message",
+    "     Turn display of headers on or off",
+    "            Set output mode where MODE is one of:\n"
+    "                            csv      Comma-separated values\n"
+    "                            column   Left-aligned columns.  (See .width)\n"
+    "                            html     HTML <table> code\n"
+    "                            insert   SQL insert statements for TABLE\n"
+    "                            line     One value per line\n"
+    "                            list     Values delimited by .separator string\n"
+    "                            tabs     Tab-separated values\n"
+    "                            tcl      TCL list elements\n",
 };
+
 
 const char *dqlite_cli_prefix[26][DQ_CLI_PREFIX_NUM_MAX] = {
 	/* ALTER, ALTER TABLE*/
@@ -248,6 +268,21 @@ int dqlite_cli_init()
 	return 0;
 }
 
+int dqlite_cli_print(const char *line)
+{
+	return 0;
+}
+
+int dqlite_cli_query_parse(struct rows *rows)
+{
+	int ret = -1;
+	
+	if (rows == NULL)
+		return ret;
+
+	return 0;
+}
+
 int dqlite_cli_exit(const char *line)
 {
 	return (strncasecmp("quit", line, 4) == 0 
@@ -256,7 +291,13 @@ int dqlite_cli_exit(const char *line)
 
 int dqlite_cli_exec_progma(const char *line)
 {
+	int ret = -1;
+	int i;
+	
 	if (strncmp(".help", line, 5) == 0) {
+
+		if (dqlite_cli_subfix_is_valid(line, 5))
+			return ret;
 		
 		dqlite_pragma_t prag;
 
@@ -264,6 +305,95 @@ int dqlite_cli_exec_progma(const char *line)
 			
 			printf("%s    %s\n", dqlite_pragma[prag] , dqlite_pragma_desc[prag]);
 		}
+	} else if (strncmp(".header", line, 7) == 0) {
+
+		i = 7;
+		
+		if (line[i] == '\0')
+			return ret;
+
+		while (isspace(line[i++]));
+
+		if (line[--i] == '\0')
+			return ret;
+
+		if (strncasecmp("on", line + i, 2) == 0) {
+
+			if (dqlite_cli_subfix_is_valid(line, i + 2))
+				return ret;
+		
+			g_cli_context.format.show_header = true;
+		} else if (strncasecmp("off", line + i, 3) == 0) {
+
+			if (dqlite_cli_subfix_is_valid(line, i + 3))
+				return ret;
+			
+			g_cli_context.format.show_header = false;			
+		} else
+			return ret;
+
+	} else if (strncmp(".mode", line, 5) == 0) {
+
+		i = 5;
+		
+		if (line[i] == '\0')
+			return ret;
+
+		while (isspace(line[i++]));
+
+		if (line[--i] == '\0')
+			return ret;
+
+		if (strncasecmp("csv", line + i, 3) == 0) {
+
+			if (dqlite_cli_subfix_is_valid(line, i + 3))
+				return ret;
+					
+			g_cli_context.format.mode = DQLITE_CSV_MODE;
+		} else if (strncasecmp("column", line + i, 6) == 0) {
+
+			if (dqlite_cli_subfix_is_valid(line, i + 6))
+				return ret;
+		
+			g_cli_context.format.mode = DQLITE_COLUMN_MODE;
+		} else if (strncasecmp("html", line + i, 4) == 0) {
+
+			if (dqlite_cli_subfix_is_valid(line, i + 4))
+				return ret;
+		
+			g_cli_context.format.mode = DQLITE_HTML_MODE;			
+		} else if (strncasecmp("insert", line + i, 6) == 0) {
+
+			if (dqlite_cli_subfix_is_valid(line, i + 6))
+				return ret;
+		
+			g_cli_context.format.mode = DQLITE_INSERT_MODE;
+		} else if (strncasecmp("line", line + i, 4) == 0) {
+
+			if (dqlite_cli_subfix_is_valid(line, i + 4))
+				return ret;
+		
+			g_cli_context.format.mode = DQLITE_LINE_MODE;
+		} else if (strncasecmp("list", line + i, 4) == 0) {
+
+			if (dqlite_cli_subfix_is_valid(line, i + 4))
+				return ret;
+		
+			g_cli_context.format.mode = DQLITE_LIST_MODE;
+		} else if (strncasecmp("tabs", line + i, 4) == 0) {
+
+			if (dqlite_cli_subfix_is_valid(line, i + 4))
+				return ret;
+		
+			g_cli_context.format.mode = DQLITE_TABS_MODE;
+		} else if (strncasecmp("tcl", line + i, 3) == 0) {
+
+			if (dqlite_cli_subfix_is_valid(line, i + 3))
+				return ret;
+		
+			g_cli_context.format.mode = DQLITE_TCL_MODE;
+		} else
+			return ret;
 	}
 
 	return 0;
@@ -338,6 +468,8 @@ int main(int argc, char **argv) {
 		printf("cli client init failure\n");
 		return -1;
 	}
+
+	dqlite_format_init(&g_cli_context.format);
 
     linenoiseSetCompletionCallback(dqlite_cli_completion);
     linenoiseSetHintsCallback(dqlite_cli_hints);
